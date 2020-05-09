@@ -119,12 +119,8 @@ function CombineAIDriver:init(vehicle)
 		self.pipeOffsetX, _, self.pipeOffsetZ = localToLocal(dischargeNode.node, self.combine.rootNode, 0, 0, 0)
 		self:debug('Pipe offset: x = %.1f, z = %.1f', self.pipeOffsetX, self.pipeOffsetZ)
 		if wasClosed then
-			if self.pipe.animation.name then
-				self.pipe:setAnimationTime(self.pipe.animation.name, 0, true)
-			else
-				self.objectWithPipe:setPipeState(CombineAIDriver.PIPE_STATE_CLOSED)
-				self.objectWithPipe:updatePipeNodes(999999, nil)
-			end
+			self.objectWithPipe:setPipeState(CombineAIDriver.PIPE_STATE_CLOSED)
+			self.objectWithPipe:updatePipeNodes(999999, nil)
 		end
 		if self.vehicle.spec_foldable then
 			if wasFolded then
