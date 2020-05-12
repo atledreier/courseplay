@@ -66,6 +66,7 @@ CombineUnloadAIDriver.myStates = {
 	WAITING_FOR_PATHFINDER={},
 	FINDPATH_TO_TRACTOR={},
 	DRIVE_TO_COMBINE = {},
+	DRIVE_TO_MOVING_COMBINE = {},
 	DRIVE_TO_TRACTOR={},
 	DRIVE_TO_UNLOAD_COURSE ={},
 	DRIVE_BESIDE_TRACTOR ={},
@@ -222,13 +223,13 @@ function CombineUnloadAIDriver:driveOnField(dt)
 			if self.combineToUnload ~= nil then
 				self:refreshHUD()
 				courseplay:openCloseCover(self.vehicle, courseplay.OPEN_COVERS)
-				-- TODO: for now, only unloading stopped combine
 				if self:isOkToStartUnloadingCombine() then
+					-- Right behind the combine, aligned, go for the pipe
 					self:startUnloadingCombine()
 				elseif self:isOkToStartFollowingChopper() then
 					self:startFollowingChopper()
 				else
-					self:startPathfindingToCombine(self.onPathfindingDoneToCombine, nil, -15)
+					self:startDrivingToCombine()
 				end
 			else
 				if combineToWaitFor then
@@ -317,6 +318,10 @@ function CombineUnloadAIDriver:driveOnField(dt)
 		elseif self:isOkToStartFollowingChopper() then
 			self:startFollowingChopper()
 		end
+
+	elseif self.onFieldState == self.states.DRIVE_TO_COMBINE then
+
+		self:driveToMovingCombine()
 
 	elseif self.onFieldState == self.states.UNLOADING_STOPPED_COMBINE then
 
@@ -663,7 +668,8 @@ function CombineUnloadAIDriver:onLastWaypoint()
 		elseif self.onFieldState == self.states.ALIGN_TO_TRACTOR then
 			self:setNewOnFieldState(self.states.FOLLOW_TRACTOR)
 			g_trafficController:cancel(self.vehicle.rootNode)
-		elseif self.onFieldState == self.states.DRIVE_TO_COMBINE then
+		elseif self.onFieldState == self.states.DRIVE_TO_COMBINE or
+			self.onFieldState == self.states.DRIVE_TO_MOVING_COMBINE then
 			g_trafficController:cancel(self.vehicle.rootNode)
 			if self:isOkToStartUnloadingCombine() then
 				self:startUnloadingCombine()
@@ -671,7 +677,7 @@ function CombineUnloadAIDriver:onLastWaypoint()
 				self:startFollowingChopper()
 			else
 				self:debug('reached last waypoint, combine isn\'t here anymore, find path to it again')
-				self:startPathfindingToCombine(self.onPathfindingDoneToCombine, nil, -15)
+				self:startDrivingToCombine()
 			end
 		end
 	end
@@ -1202,8 +1208,8 @@ function CombineUnloadAIDriver:driveToNodeWithPathfinding(node, xOffset, zOffset
 end
 
 function CombineUnloadAIDriver:isWithinSafeManeuveringDistance()
-	local dx, _, dz = localToLocal(self.vehicle.rootNode, AIDriverUtil.getDirectionNode(self.combineToUnload), 0, 0, 0)
-	return MathUtil.vector2Length(dx, dz) < self.safeManeuveringDistance
+	local d = calcDistanceFrom(self.vehicle.rootNode, AIDriverUtil.getDirectionNode(self.combineToUnload))
+	return d < self.safeManeuveringDistance
 end
 
 function CombineUnloadAIDriver:isBehindAndAlignedToCombine(maxDirectionDifferenceDeg)
@@ -1348,6 +1354,43 @@ function CombineUnloadAIDriver:getCombineRootNode()
 end
 
 ------------------------------------------------------------------------------------------------------------------------
+--Start driving to combine
+------------------------------------------------------------------------------------------------------------------------
+function CombineUnloadAIDriver:startDrivingToCombine()
+	if self.combineToUnload.cp.driver:isWaitingForUnload() then
+		self:debug('Combine is waiting for unload, start finding path to combine')
+		self:startPathfindingToCombine(self.onPathfindingDoneToCombine, nil, -15)
+	else
+		-- combine is moving, agree on a rendezvous
+		-- for now, just use the Eucledian distance. This should rather be the length of a pathfinder generated
+		-- path, using the simple A* should be good enough for estimation, the hybrid A* would be too slow
+		local d = self:getDistanceFromCombine()
+		local estimatedSecondsEnroute = d / (self:getFieldSpeed() / 3.6)
+		local rendezvousWaypoint, rendezvousWaypointIx = self.combineToUnload.cp.driver:getUnloaderRendezvousWaypoint(estimatedSecondsEnroute)
+		if rendezvousWaypoint then
+			self:debug('Start pathfinding to moving combine, %d m, ETE: %d s, meet combine at waypoint %d',
+					d, estimatedSecondsEnroute, rendezvousWaypointIx)
+			self:startPathfinding(rendezvousWaypoint,
+					self.combineToUnload.cp.driver:getPipeOffset(-self.vehicle.cp.combineOffset), -15, 0,
+					{self.combineToUnload}, self.onPathfindingDoneToMovingCombine)
+		else
+			self:debug('can\'t find rendezvous waypoint to combine, waiting')
+			--self:startPathfindingToCombine(self.onPathfindingDoneToCombine, nil, -15)
+		end
+	end
+end
+
+function CombineUnloadAIDriver:onPathfindingDoneToMovingCombine(path)
+	if self:isPathFound(path) then
+		local driveToCombineCourse = Course(self.vehicle, courseGenerator.pointsToXzInPlace(path), true)
+		self:startCourse(driveToCombineCourse, 1)
+		self:setNewOnFieldState(self.states.DRIVE_TO_MOVING_COMBINE)
+	else
+		self:setNewOnFieldState(self.states.WAITING_FOR_COMBINE_TO_CALL)
+	end
+end
+
+------------------------------------------------------------------------------------------------------------------------
 --Pathfinding to combine
 ------------------------------------------------------------------------------------------------------------------------
 function CombineUnloadAIDriver:startPathfindingToCombine(onPathfindingDoneFunc, xOffset, zOffset)
@@ -1417,8 +1460,11 @@ function CombineUnloadAIDriver:startPathfinding(
 		self.pathfindingStartedAt = self.vehicle.timer
 
 		if type(target) ~= 'number' then
+			-- TODO: clarify this xOffset thing, it looks like the course interprets the xOffset differently (left < 0) than
+			-- the Giants coordinate system and the waypoint uses the course's conventions. This is confusing, should use
+			-- the same reference everywhere
 			self.pathfinder, done, path = PathfinderUtil.startPathfindingFromVehicleToWaypoint(
-					self.vehicle, target, xOffset or 0, zOffset or 0, self.allowReversePathfinding,
+					self.vehicle, target, -xOffset or 0, zOffset or 0, self.allowReversePathfinding,
 					fieldNum, { vehicleToIgnore }, self.vehicle.cp.realisticDriving and 10 or math.huge)
 		else
 			self.pathfinder, done, path = PathfinderUtil.startPathfindingFromVehicleToNode(
@@ -1483,6 +1529,35 @@ function CombineUnloadAIDriver:changeToUnloadWhenFull()
 		local reverseCourse = self:getStraightReverseCourse()
 		self:startCourse(reverseCourse, 1)
 		self:setNewOnFieldState(self.states.DRIVE_BACK_FULL)
+	end
+end
+
+------------------------------------------------------------------------------------------------------------------------
+-- Drive to moving combine
+------------------------------------------------------------------------------------------------------------------------
+function CombineUnloadAIDriver:driveToMovingCombine()
+	self.forwardLookingProximitySensorPack:enableSpeedControl()
+
+	courseplay:setInfoText(self.vehicle, "COURSEPLAY_DRIVE_TO_COMBINE");
+
+
+	self:setFieldSpeed()
+
+	--use trafficController
+	if not self:trafficControlOK() then
+		self:debugSparse('Traffic conflict, stop.')
+		self:hold()
+	end
+
+	-- stop when too close to a combine not ready to unload (wait until it is done with turning for example)
+	if self:isWithinSafeManeuveringDistance() and self.combineToUnload.cp.driver:isManeuvering() then
+		self:debugSparse('Too close to maneuvering combine, stop.')
+		self:hold()
+	end
+
+	self:setFieldSpeed()
+	if self:isOkToStartUnloadingCombine() then
+		self:startUnloadingCombine()
 	end
 end
 

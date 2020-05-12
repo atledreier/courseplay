@@ -674,6 +674,18 @@ function AIDriver:setSpeed(speed)
 	self.speed = math.min(self.speed, speed)
 end
 
+--- Speed on the field when not working
+function AIDriver:getFieldSpeed()
+	return self.vehicle.cp.speeds.field
+end
+
+--- Speed on the field when working
+function AIDriver:getWorkSpeed()
+	-- use the speed limit supplied by Giants for fieldwork
+	local speedLimit = self.vehicle:getSpeedLimit() or math.huge
+	return math.min(self.vehicle.cp.speeds.field, speedLimit)
+end
+
 function AIDriver:resetLastMoveCommandTime()
 	self.lastMoveCommandTime = self.vehicle.timer
 end

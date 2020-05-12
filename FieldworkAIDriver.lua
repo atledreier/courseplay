@@ -632,18 +632,6 @@ function FieldworkAIDriver:shouldReturnToFirstPoint()
 	end
 end
 
---- Speed on the field when not working
-function FieldworkAIDriver:getFieldSpeed()
-	return self.vehicle.cp.speeds.field
-end
-
--- Speed on the field when working
-function FieldworkAIDriver:getWorkSpeed()
-	-- use the speed limit supplied by Giants for fieldwork
-	local speedLimit = self.vehicle:getSpeedLimit() or math.huge
-	return math.min(self.vehicle.cp.speeds.field, speedLimit)
-end
-
 --- Pass on self.speed set elsewhere to the AIDriver.
 function FieldworkAIDriver:getSpeed()
 	local speed = AIDriver.getSpeed(self)

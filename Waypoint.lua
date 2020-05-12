@@ -669,6 +669,10 @@ function Course:getDistanceToNextWaypoint(ix)
 	return self.waypoints[math.min(#self.waypoints, ix)].dToNext
 end
 
+function Course:getDistanceBetweenWaypoints(a, b)
+	return math.abs(self.waypoints[a].dToHere - self.waypoints[b].dToHere)
+end
+
 function Course:getDistanceFromFirstWaypoint(ix)
 	return self.waypoints[ix].dToHere
 end
@@ -781,7 +785,6 @@ end
 function Course:hasTurnWithinDistance(ix, distance)
 	return self:hasWaypointWithPropertyWithinDistance(ix, distance, function(p) return p.turnStart or p.turnEnd end)
 end
-
 
 function Course:hasWaypointWithPropertyWithinDistance(ix, distance, hasProperty)
 	-- search backwards first
@@ -969,6 +972,15 @@ end
 
 function Course:getDistanceToNextTurn(ix)
 	return self.waypoints[ix].dToNextTurn
+end
+
+function Course:getRowLength(ix)
+	for i = ix, 1, -1 do
+		if self:isTurnEndAtIx(i) then
+			return self:getDistanceToNextTurn(i), i
+		end
+	end
+	return 0, nil
 end
 
 function Course:getNextRowLength(ix)
