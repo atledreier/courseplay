@@ -301,6 +301,7 @@ function FieldworkAIDriver:stop(msgReference)
 end
 
 function FieldworkAIDriver:drive(dt)
+	-- TODO: this is also called in UnloadableFieldworkAIDriver
 	courseplay:updateFillLevelsAndCapacities(self.vehicle)
 	if self.state == self.states.ON_FIELDWORK_COURSE then
 		if self:driveFieldwork(dt) then

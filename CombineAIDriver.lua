@@ -159,9 +159,10 @@ end
 function CombineAIDriver:start(startingPoint)
 	self:clearAllUnloaderInformation()
 	self:addBackwardProximitySensor()
-	self:info('Force stop for unload for the first mode 2 version')
-	self.vehicle.cp.settings.stopForUnload:set(true)
 	UnloadableFieldworkAIDriver.start(self, startingPoint)
+	local total, pipeInFruit = self.fieldworkCourse:setPipeInFruitMap(self.pipeOffsetX, self.vehicle.cp.workWidth)
+	self:debug('Pipe in fruit map created, there are %d non-headland waypoints, of which at %d the pipe will be in the fruit',
+			total, pipeInFruit)
 end
 
 function CombineAIDriver:setHudContent()
@@ -315,14 +316,14 @@ function CombineAIDriver:driveFieldwork(dt)
 		if self.agreedUnloaderRendezvousWaypointIx then
 			local d = self.fieldworkCourse:getDistanceBetweenWaypoints(self.fieldworkCourse:getCurrentWaypointIx(),
 					self.agreedUnloaderRendezvousWaypointIx)
-			if d < 20 then
+			if d < 10 then
 				self:debugSparse('Slow down around the unloader rendezvous waypoint %d to let the unloader catch up',
 					self.agreedUnloaderRendezvousWaypointIx)
 				self:setSpeed(self:getWorkSpeed() / 2)
 			end
 		end
 	end
-	UnloadableFieldworkAIDriver.driveFieldwork(self, dt)
+	return UnloadableFieldworkAIDriver.driveFieldwork(self, dt)
 end
 
 --- Stop for unload/refill while driving the fieldwork course
@@ -559,9 +560,13 @@ function CombineAIDriver:getUnloaderRendezvousWaypoint(unloaderEstimatedSecondsE
 	self:debug('Seconds until full: %d, unloader ETE: %d', self.secondsUntilFull or -1, unloaderEstimatedSecondsEnroute)
 
 	if not self.secondsUntilFull or (self.secondsUntilFull and self.secondsUntilFull > unloaderEstimatedSecondsEnroute) then
-		unloaderRendezvousWaypointIx = self:getSafeUnloaderDestinationWaypoint(unloaderRendezvousWaypointIx)
-		self.agreedUnloaderRendezvousWaypointIx = unloaderRendezvousWaypointIx
 		-- unloader will reach us before we are full, or we don't know where we'll be full, guess at which waypoint we will be by then
+		unloaderRendezvousWaypointIx = self:getSafeUnloaderDestinationWaypoint(unloaderRendezvousWaypointIx)
+		if self.fieldworkCourse:isPipeInFruitAt(unloaderRendezvousWaypointIx) then
+			self:debug('pipe would be in fruit at the planned rendezvous waypoint %d', unloaderRendezvousWaypointIx)
+			return nil, 0, 0
+		end
+		self.agreedUnloaderRendezvousWaypointIx = unloaderRendezvousWaypointIx
 		self:debug('Rendezvous with unloader at waypoint %d in %d m', unloaderRendezvousWaypointIx, dToUnloaderRendezvous)
 		return self.fieldworkCourse:getWaypoint(unloaderRendezvousWaypointIx), unloaderRendezvousWaypointIx, unloaderEstimatedSecondsEnroute
 
@@ -584,9 +589,17 @@ end
 function CombineAIDriver:getSafeUnloaderDestinationWaypoint(ix)
 	local newWpIx = ix
 	if self.fieldworkCourse:isTurnStartAtIx(ix) then
-		-- turn start waypoints usually aren't safe as they point to the turn end direction in 180 turns
-		-- so use the one before
-		newWpIx = ix - 1
+		if self.fieldworkCourse:isOnHeadland(ix) then
+			-- on the headland, use the wp after the turn, the one before may be very far, especially on a
+			-- transition from headland to up/down rows.
+			newWpIx = ix + 1
+		else
+			-- turn start waypoints usually aren't safe as they point to the turn end direction in 180 turns
+			-- so use the one before
+			newWpIx = ix - 1
+		end
+	else
+
 	end
 	return newWpIx
 end
@@ -597,7 +610,8 @@ function CombineAIDriver:checkFruitAtNode(node, offsetX, offsetZ)
 	return hasFruit, fruitValue
 end
 
-function CombineAIDriver:isPipeInFruitAtWaypoint(course, ix)
+--- Is pipe in fruit according to the current field harvest state at waypoint?
+function CombineAIDriver:isPipeInFruitAtWaypointNow(course, ix)
 	if not self.aiDriverData.fruitCheckHelperWpNode then
 		self.aiDriverData.fruitCheckHelperWpNode = WaypointNode(nameNum(self.vehicle) .. 'fruitCheckHelperWpNode')
 	end
