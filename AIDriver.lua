@@ -1754,12 +1754,12 @@ function AIDriver:checkProximitySensor(maxSpeed, allowedToDrive, moveForwards)
 	local d, range = math.huge, 10
 	if moveForwards then
 		if self.forwardLookingProximitySensorPack and self.forwardLookingProximitySensorPack:isSpeedControlEnabled() then
-			d = self.forwardLookingProximitySensorPack:getClosestObjectDistance()
+			d = self.forwardLookingProximitySensorPack:getClosestObjectDistanceAndRootVehicle()
 			range = self.forwardLookingProximitySensorPack:getRange()
 		end
 	else
 		if self.backwardLookingProximitySensorPack and self.backwardLookingProximitySensorPack:isSpeedControlEnabled() then
-			d = self.backwardLookingProximitySensorPack:getClosestObjectDistance()
+			d = self.backwardLookingProximitySensorPack:getClosestObjectDistanceAndRootVehicle()
 			range = self.backwardLookingProximitySensorPack:getRange()
 		end
 	end

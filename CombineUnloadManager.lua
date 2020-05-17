@@ -338,6 +338,7 @@ end
 function CombineUnloadManager:getCombinesPipeOffset(combine)
 	return self.combines[combine].pipeOffset
 end
+
 function CombineUnloadManager:getPossibleSidesToDrive(combine)
 	return self.combines[combine].leftOkToDrive, self.combines[combine].rightOKToDrive;
 end
@@ -517,10 +518,11 @@ function CombineUnloadManager:getOnFieldSituation(combine)
 
 	--print(string.format("fruit:%s; leftFruit:%s; totalLeft:%s, leftField:%s, rightFruit:%s, totalRight:%s; rightField:%s",
 	--tostring(fruitType),tostring(leftFruit),tostring(totalArealeft),tostring(leftField),tostring(rightFruit),tostring(totalArearight),tostring(rightField)))
-
-	local leftOK = leftField and leftFruit < totalAreaLeft*0.05
-	local rightOK = rightField and rightFruit < totalAreaRight*0.05
-	return leftOK,rightOK
+	-- TODO: for now, don't care if there's field on left/right
+	leftField, rightField = true, true
+	local leftOK = leftField and leftFruit < totalAreaLeft * 0.05
+	local rightOK = rightField and rightFruit < totalAreaRight * 0.05
+	return leftOK, rightOK
 end
 
 function CombineUnloadManager:getPossibleCombines(vehicle)

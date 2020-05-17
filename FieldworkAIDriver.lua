@@ -453,9 +453,9 @@ end
 function FieldworkAIDriver:changeToFieldworkUnloadOrRefill()
 	self.fieldworkState = self.states.UNLOAD_OR_REFILL_ON_FIELD
 	if self.stopImplementsWhileUnloadOrRefillOnField then
-		self.fieldWorkUnloadOrRefillState = self.states.WAITING_FOR_STOP
+		self.fieldworkUnloadOrRefillState = self.states.WAITING_FOR_STOP
 	else
-		self.fieldWorkUnloadOrRefillState = self.states.WAITING_FOR_UNLOAD_OR_REFILL
+		self.fieldworkUnloadOrRefillState = self.states.WAITING_FOR_UNLOAD_OR_REFILL
 	end
 end
 
@@ -463,14 +463,14 @@ end
 function FieldworkAIDriver:driveFieldworkUnloadOrRefill()
 	-- don't move while empty
 	self:setSpeed(0)
-	if self.fieldWorkUnloadOrRefillState == self.states.WAITING_FOR_STOP then
+	if self.fieldworkUnloadOrRefillState == self.states.WAITING_FOR_STOP then
 		-- wait until we stopped before raising the implements
 		if self:isStopped() then
 			self:debug('implements raised, stop')
 			self:stopWork()
-			self.fieldWorkUnloadOrRefillState = self.states.WAITING_FOR_UNLOAD_OR_REFILL
+			self.fieldworkUnloadOrRefillState = self.states.WAITING_FOR_UNLOAD_OR_REFILL
 		end
-	elseif self.fieldWorkUnloadOrRefillState == self.states.WAITING_FOR_UNLOAD_OR_REFILL then
+	elseif self.fieldworkUnloadOrRefillState == self.states.WAITING_FOR_UNLOAD_OR_REFILL then
 		if self:allFillLevelsOk() and not self.heldForUnloadRefill then
 			self:debug('unloaded, continue working')
 			-- not full/empty anymore, maybe because Refilling to a trailer, go back to work

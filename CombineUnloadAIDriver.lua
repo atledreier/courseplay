@@ -90,7 +90,8 @@ CombineUnloadAIDriver.myStates = {
 	HANDLE_CHOPPER_180_TURN = {},
 	FOLLOW_CHOPPER_THROUGH_TURN = {},
 	ALIGN_TO_CHOPPER_AFTER_TURN = {},
-	WAIT_FOR_CHOPPER_TURNED = {}
+	WAIT_FOR_CHOPPER_TURNED = {},
+	MOVING_OUT_OF_WAY = {}
 }
 
 --- Constructor
@@ -322,6 +323,10 @@ function CombineUnloadAIDriver:driveOnField(dt)
 	elseif self.onFieldState == self.states.UNLOADING_STOPPED_COMBINE then
 
 		self:unloadStoppedCombine()
+
+	elseif self.onFieldState == self.states.MOVING_OUT_OF_WAY then
+
+		self:setSpeed(self.vehicle.cp.speeds.reverse)
 
 	elseif self.onFieldState == self.states.GET_ALIGNCOURSE_TO_TRACTOR then
 		local tempCourseToAlign = self:getCourseToAlignTo(self.tractorToFollow,0)
@@ -559,7 +564,7 @@ function CombineUnloadAIDriver:driveBesideCombine()
 	local targetNode = self:getTrailersTargetNode()
 	local _, offsetZ = self.combineToUnload.cp.driver:getPipeOffset(-self.vehicle.cp.combineOffset, self.vehicle.cp.tipperOffset)
 	-- TODO: this - 1 is a workaround the fact that we use a simple P controller instead of a PI
-	local _, _, dz = localToLocal(targetNode, self:getCombineRootNode(), 0, 0, - offsetZ - 1)
+	local _, _, dz = localToLocal(targetNode, self:getCombineRootNode(), 0, 0, - offsetZ - 0.5)
 	-- use a factor of two to make sure we reach the pipe fast
 	local speed = self.combineToUnload.lastSpeedReal * 3600 + MathUtil.clamp(-dz * 1.5, -10, 15)
 	self:renderText(0, 0.02, "%s: driveBesideCombine: dz = %.1f, speed = %.1f", nameNum(self.vehicle), dz, speed)
@@ -570,7 +575,7 @@ end
 
 function CombineUnloadAIDriver:driveBesideChopper()
 	local targetNode = self:getTrailersTargetNode()
-	self:renderText(0, 0.02,"%s: driveBesideCombine:offset local :%s saved:%s",nameNum(self.vehicle),tostring(self.combineOffset),tostring(self.vehicle.cp.combineOffset))
+	self:renderText(0, 0.02,"%s: driveBesideChopper:offset local :%s saved:%s",nameNum(self.vehicle),tostring(self.combineOffset),tostring(self.vehicle.cp.combineOffset))
 	self:releaseAutoAimNode()
 	local _, _, dz = localToLocal(targetNode, self:getCombineRootNode(), 0, 0, 5)
 	renderText(0.2,0.325,0.02,string.format("dz: %.1f", dz))
@@ -678,6 +683,8 @@ function CombineUnloadAIDriver:onLastWaypoint()
 				self:debug('reached last waypoint, combine isn\'t here anymore, find path to it again')
 				self:startDrivingToCombine()
 			end
+		elseif self.onFieldState == self.states.MOVING_OUT_OF_WAY then
+			self:setNewOnFieldState(self.stateAfterMovedOutOfWay)
 		end
 	end
 	AIDriver.onLastWaypoint(self)
@@ -720,9 +727,10 @@ function CombineUnloadAIDriver:getCourseToAlignTo(vehicle,offset)
 	return tempCourse
 end
 
-function CombineUnloadAIDriver:getStraightReverseCourse()
+function CombineUnloadAIDriver:getStraightReverseCourse(length)
 	local waypoints = {}
-	for i=0, -100, -5 do
+	local l = length or 100
+	for i=0, -l, -5 do
 		local x, y, z = localToWorld(self.trailerToFill.rootNode, 0, 0, i)
 		table.insert(waypoints, {x = x, y = y, z = z, rev = true})
 	end
@@ -911,7 +919,7 @@ end
 
 function CombineUnloadAIDriver:getSpeedBehindChopper()
 	local distanceToChoppersBack, _, dz = self:getDistanceFromCombine()
-	local fwdDistance = self.forwardLookingProximitySensorPack:getClosestObjectDistance()
+	local fwdDistance = self.forwardLookingProximitySensorPack:getClosestObjectDistanceAndRootVehicle()
 	if dz < 0 then
 		-- I'm way too forward, stop here as I'm most likely beside the chopper, let it pass before
 		-- moving to the middle
@@ -931,8 +939,8 @@ end
 function CombineUnloadAIDriver:getOffsetBehindChopper()
 	local distanceToChoppersBack, dx, dz = self:getDistanceFromCombine()
 
-	local rightDistance = self.forwardLookingProximitySensorPack:getClosestObjectDistance(-90)
-	local fwdRightDistance = self.forwardLookingProximitySensorPack:getClosestObjectDistance(-45)
+	local rightDistance = self.forwardLookingProximitySensorPack:getClosestObjectDistanceAndRootVehicle(-90)
+	local fwdRightDistance = self.forwardLookingProximitySensorPack:getClosestObjectDistanceAndRootVehicle(-45)
 	local minDistance = math.min(rightDistance, fwdRightDistance / 1.4)
 
 	local currentOffsetX, _ = self.followCourse:getOffset()
@@ -1140,7 +1148,7 @@ end
 function CombineUnloadAIDriver:combineIsMakingPocket()
 	local combineDriver = self.combineToUnload.cp.driver
 	if combineDriver ~= nil then
-		return combineDriver.fieldWorkUnloadOrRefillState == combineDriver.states.MAKING_POCKET
+		return combineDriver.fieldworkUnloadOrRefillState == combineDriver.states.MAKING_POCKET
 	end
 end
 
@@ -1211,8 +1219,10 @@ end
 
 function CombineUnloadAIDriver:isBehindAndAlignedToCombine(maxDirectionDifferenceDeg)
 	local dx, _, dz = localToLocal(self.vehicle.rootNode, AIDriverUtil.getDirectionNode(self.combineToUnload), 0, 0, 0)
-	-- close enough and approximately same direction and behind
-	return dz < 0 and MathUtil.vector2Length(dx, dz) < 30 and
+	local pipeOffset = self.combineToUnload.cp.driver:getPipeOffset()
+
+	-- close enough and approximately same direction and behind and not too far to the left or right
+	return dz < 0 and math.abs(dx) < math.abs(1.5 * pipeOffset) and  MathUtil.vector2Length(dx, dz) < 30 and
 			TurnContext.isSameDirection(AIDriverUtil.getDirectionNode(self.vehicle), AIDriverUtil.getDirectionNode(self.combineToUnload),
 					maxDirectionDifferenceDeg or 45)
 
@@ -1270,7 +1280,6 @@ function CombineUnloadAIDriver:startUnloadingCombine()
 	else
 		self:debug('Close enough to moving combine, copy combine course and follow')
 		self:startCourseFollowingCombine()
-		self:setNewOnFieldState(self.states.UNLOADING_MOVING_COMBINE)
 	end
 end
 
@@ -1325,29 +1334,18 @@ function CombineUnloadAIDriver:setupFollowCourse()
 end
 
 ------------------------------------------------------------------------------------------------------------------------
--- Start following a combine/chopper on a course
----@param skipTurnStart boolean if the current waypoint index of the combine is on a turn start, skip to the
---- turn end WP instead. This is to avoid starting following a combine at the turn start WP while the combine is
---- already finishing the course. The current waypoint remains the turn start waypoint during the turn (TODO: review
---- this legacy behavior)
+-- Start following a combine a course
+-- This assumes we are in a good position to do that and can start on the course without pathfinding
+-- or alignment, that is, we only call this when isOkToStartUnloadingCombine() says it is ok
 ------------------------------------------------------------------------------------------------------------------------
 function CombineUnloadAIDriver:startCourseFollowingCombine()
 	self.followCourse, self.followCourseIx = self:setupFollowCourse()
-	local forcePathfinding = false
-	if courseplay:isChopper(self.combineToUnload) then
-		self.combineOffset = self:getChopperOffset(self.combineToUnload)
-		-- be more liberal about what 'aligned' means, chopper will move forward anyway when we are in range
-		forcePathfinding = not self:isBehindAndAlignedToCombine(90)
-	else
-		self.combineOffset = self:getCombineOffset(self.combineToUnload)
-		-- if the combine is not moving forward we have use pathfinding to get to the pipe so we won't
-		-- bump into the combine.
-		forcePathfinding = self.combineToUnload.cp.driver:isStopped()
-	end
+	self.combineOffset = self:getCombineOffset(self.combineToUnload)
 	self.followCourse:setOffset(-self.combineOffset, 0)
-	self:debug('Will follow combine\'s course at waypoint %d, side offset %.1f, force pathfinding %s',
-			self.followCourseIx, self.followCourse.offsetX, tostring(forcePathfinding))
-	self:startCourseWithPathfinding(self.followCourse, self.followCourseIx, 0, 0, forcePathfinding)
+	self:debug('Will follow combine\'s course at waypoint %d, side offset %.1f',
+			self.followCourseIx, self.followCourse.offsetX)
+	self:startCourse(self.followCourse, self.followCourseIx)
+	self:setNewOnFieldState(self.states.UNLOADING_MOVING_COMBINE)
 end
 
 function CombineUnloadAIDriver:isPathFound(path)
@@ -1572,6 +1570,25 @@ function CombineUnloadAIDriver:getDistanceFromCombine()
 end
 
 ------------------------------------------------------------------------------------------------------------------------
+-- Can drive beside combine?
+-- Other code will take care of using the correct offset, all we want to know here is
+-- if we can drive under the pipe, regardless of which side it is on
+------------------------------------------------------------------------------------------------------------------------
+function CombineUnloadAIDriver:canDriveBesideCombine(combine)
+	-- no fruit avoidance, don't care
+	if not self.vehicle.cp.realisticDriving then return true end
+	-- TODO: or just use combine:pipeInFruit() instead?
+	local leftOk, rightOk = g_combineUnloadManager:getPossibleSidesToDrive(combine)
+	if leftOk and combine.cp.driver:isPipeOnLeft() then
+		return true
+	elseif rightOk and not combine.cp.driver:isPipeOnLeft() then
+		return true
+	else
+		return false
+	end
+end
+
+------------------------------------------------------------------------------------------------------------------------
 -- Update combine status
 ------------------------------------------------------------------------------------------------------------------------
 function CombineUnloadAIDriver:updateCombineStatus()
@@ -1617,11 +1634,12 @@ function CombineUnloadAIDriver:driveToMovingCombine()
 
 	self:setFieldSpeed()
 
-	--use trafficController
-	if not self:trafficControlOK() then
-		self:debugSparse('Traffic conflict, stop.')
-		self:hold()
-	end
+	-- don't use trafficController, the maneuvering stuff will keep us away from the combine (as long there are
+	-- no other vehicles around)
+--	if not self:trafficControlOK() then
+--		self:debugSparse('Traffic conflict, stop.')
+--		self:hold()
+--	end
 
 	-- stop when too close to a combine not ready to unload (wait until it is done with turning for example)
 	if self:isWithinSafeManeuveringDistance() and self.combineToUnload.cp.driver:isManeuvering() then
@@ -1664,14 +1682,11 @@ end
 ------------------------------------------------------------------------------------------------------------------------
 -- Unload combine (moving)
 ------------------------------------------------------------------------------------------------------------------------
-function CombineUnloadAIDriver:unloadMovingCombine(dt)
+function CombineUnloadAIDriver:unloadMovingCombine()
 
 	-- TODO: handle pipe on the left side
 	-- disable looking to the right so the proximity sensor won't slow us down while driving beside the combine
 	self.forwardLookingProximitySensorPack:disableRightSide()
-
-	--decide where to drive, behind or beside
-	local leftOK = g_combineUnloadManager:getPossibleSidesToDrive(self.combineToUnload)
 
 	--when trailer is full then go to unload
 	if self:getDriveUnloadNow() or self:getAllTrailersFull() then
@@ -1681,17 +1696,13 @@ function CombineUnloadAIDriver:unloadMovingCombine(dt)
 		return
 	end
 
-	if leftOK or (self.combineToUnload.cp.driver and self.combineToUnload.cp.driver:isWaitingInPocket()) then
+	if self:canDriveBesideCombine(self.combineToUnload) or (self.combineToUnload.cp.driver and self.combineToUnload.cp.driver:isWaitingInPocket()) then
 		self:driveBesideCombine()
 	else
-		self:driveBehindCombine(dt)
-
-		if self.combineToUnload.cp.driver.ppc:isReversing() then
-			local reverseCourse = self:getStraightReverseCourse()
-			AIDriver.startCourse(self,reverseCourse,1)
-			self:setNewOnFieldState(self.states.DRIVE_BACK_FROM_REVERSING_COMBINE_NOTURN)
-			return
-		end
+		self:debug('Can\'t drive beside combine, releasing it.')
+		self:releaseUnloader()
+		self:setNewOnFieldState(self.states.WAITING_FOR_COMBINE_TO_CALL)
+		return
 	end
 
 	--when the combine is empty, stop and wait for next combine
@@ -1933,6 +1944,14 @@ function CombineUnloadAIDriver:onCombineTurnStart(ix, turnType)
 			--self:startChopperTurn(ix, turnType)
 		end
 	end
+end
+
+function CombineUnloadAIDriver:onBlockingOtherVehicle(blockedVehicle)
+	self.stateAfterMovedOutOfWay = self.onFieldState
+	self:debug('%s wants me to move out of way', blockedVehicle:getName())
+	local reverseCourse = self:getStraightReverseCourse(10)
+	self:startCourse(reverseCourse, 1, self.course, self.course:getCurrentWaypointIx())
+	self:setNewOnFieldState(self.states.MOVING_OUT_OF_WAY)
 end
 
 ------------------------------------------------------------------------------------------------------------------------
