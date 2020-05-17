@@ -203,13 +203,9 @@ function CombineUnloadAIDriver:driveOnField(dt)
 	-- safety check: combine has active AI driver
 	if self.combineToUnload and not self.combineToUnload.cp.driver:isActive() then
 		self:setSpeed(0)
-	end
-
-	if self.vehicle.cp.forcedToStop then
-		self:stopAndWait(dt)
-		return
-	end
-	if self.onFieldState == self.states.WAITING_FOR_COMBINE_TO_CALL then
+	elseif self.vehicle.cp.forcedToStop then
+		self:setSpeed(0)
+	elseif self.onFieldState == self.states.WAITING_FOR_COMBINE_TO_CALL then
 		local combineToWaitFor
 		if self:getDriveUnloadNow() or self:getAllTrailersFull() or self:shouldDriveOn() then
 			self:debug('Was waiting for a combine but drive now requested or trailer full')
@@ -382,7 +378,7 @@ function CombineUnloadAIDriver:driveOnField(dt)
 			self:setNewOnFieldState(self.states.FOLLOW_CHOPPER)
 		end
 
-		self:setSavedCombineOffset(self.tractorToFollow.cp.combineOffset)
+		--self:setSavedCombineOffset(self.tractorToFollow.cp.combineOffset)
 		--if chopper is turning , wait till turn is done
 		if self:getCombineIsTurning() then
 			self:hold()
@@ -605,7 +601,7 @@ function CombineUnloadAIDriver:driveBehindCombine(dt)
 		--print("STOOOOOOP")
 		allowedToDrive = false
 	else
-		self:setSavedCombineOffset(self.combineOffset)
+		--self:setSavedCombineOffset(self.combineOffset)
 	end
 
 
@@ -1095,7 +1091,7 @@ function CombineUnloadAIDriver:raycastDistanceCallback(hitObjectId, x, y, z, dis
 end
 
 function CombineUnloadAIDriver:getCombinesMeasuredBackDistance()
-	return g_combineUnloadManager:getCombinesMeasuredBackDistance(self.combineToUnload)
+	return self.combineToUnload.cp.driver:getMeasuredBackDistance()
 end
 
 function CombineUnloadAIDriver:getCanShowDriveOnButton()
@@ -1387,11 +1383,12 @@ function CombineUnloadAIDriver:startDrivingToCombine()
 		local rendezvousWaypoint, rendezvousWaypointIx = self.combineToUnload.cp.driver:getUnloaderRendezvousWaypoint(estimatedSecondsEnroute)
 		if rendezvousWaypoint then
 			self:setNewOnFieldState(self.states.WAITING_FOR_PATHFINDER)
-			self:debug('Start pathfinding to moving combine, %d m, ETE: %d s, meet combine at waypoint %d',
-					d, estimatedSecondsEnroute, rendezvousWaypointIx)
-			self:startPathfinding(rendezvousWaypoint,
-					self.combineToUnload.cp.driver:getPipeOffset(-self.vehicle.cp.combineOffset), -15, 0,
-					{self.combineToUnload}, self.onPathfindingDoneToMovingCombine)
+			local xOffset = self.combineToUnload.cp.driver:getPipeOffset(-self.vehicle.cp.combineOffset)
+			local zOffset = -15
+			self:debug('Start pathfinding to moving combine, %d m, ETE: %d s, meet combine at waypoint %d, xOffset = %.1f, zOffset = %.1f',
+					d, estimatedSecondsEnroute, rendezvousWaypointIx, xOffset, zOffset)
+			self:startPathfinding(rendezvousWaypoint, xOffset, zOffset, 0,
+					self.combineToUnload, self.onPathfindingDoneToMovingCombine)
 		else
 			self:debug('can\'t find rendezvous waypoint to combine, waiting')
 			--self:startPathfindingToCombine(self.onPathfindingDoneToCombine, nil, -15)
@@ -1630,9 +1627,7 @@ function CombineUnloadAIDriver:driveToMovingCombine()
 	if self:isWithinSafeManeuveringDistance() and self.combineToUnload.cp.driver:isManeuvering() then
 		self:debugSparse('Too close to maneuvering combine, stop.')
 		self:hold()
-	end
-
-	if self:isOkToStartUnloadingCombine() then
+	elseif self:isOkToStartUnloadingCombine() then
 		self:startUnloadingCombine()
 	end
 end
@@ -1698,6 +1693,7 @@ function CombineUnloadAIDriver:unloadMovingCombine(dt)
 			return
 		end
 	end
+
 	--when the combine is empty, stop and wait for next combine
 	if self:getCombinesFillLevelPercent() <= 0.1 then
 		--when the combine is in a pocket, make room to get back to course
@@ -1721,8 +1717,12 @@ function CombineUnloadAIDriver:unloadMovingCombine(dt)
 	end
 
 	-- when the combine is turning just don't move
-	if self:getCombineIsTurning() then
+	if self.combineToUnload.cp.driver:isManeuvering() then
 		self:hold()
+	elseif not self:isOkToStartUnloadingCombine() then
+		-- switch to driving only when not holding for maneuvering combine
+		-- for some reason (like combine turned) we are not in a good position anymore then set us up again
+		self:startDrivingToCombine()
 	end
 end
 

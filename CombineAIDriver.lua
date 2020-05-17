@@ -149,6 +149,7 @@ function CombineAIDriver:init(vehicle)
 	self.pocketReverseDistance = 25
 	-- register ourselves at our boss
 	g_combineUnloadManager:addCombineToList(self.vehicle, self)
+	self:measureBackDistance()
 end
 
 --- Get the combine object, this can be different from the vehicle in case of tools towed or mounted on a tractor
@@ -1375,6 +1376,39 @@ function CombineAIDriver:shouldStrawSwathBeOn(ix)
 		self:setStrawSwath(strawSwath)
 	end
 end
+
+CombineAIDriver.maxBackDistance = 10
+
+function CombineAIDriver:getMeasuredBackDistance()
+	return self.measuredBackDistance
+end
+
+--- Determine how far the back of the combine is from the direction node
+-- TODO: attached/towed harvesters
+function CombineAIDriver:measureBackDistance()
+	self.measuredBackDistance = 0
+	-- raycast from a point behind the vehicle forward towards the direction node
+	local nx, ny, nz = localDirectionToWorld(self:getDirectionNode(), 0, 0, 1)
+	local x, y, z = localToWorld(self:getDirectionNode(), 0, 1.5, - self.maxBackDistance)
+	raycastAll(x, y, z, nx, ny, nz, 'raycastBackCallback', self.maxBackDistance, self)
+end
+
+-- I believe this tries to figure out how far the back of a combine is from its direction node.
+function CombineAIDriver:raycastBackCallback(hitObjectId, x, y, z, distance, nx, ny, nz, subShapeIndex)
+	if hitObjectId ~= 0 then
+		local object = g_currentMission:getNodeObject(hitObjectId)
+		if object and object == self.vehicle then
+			local d = self.maxBackDistance - distance
+			if d > self.measuredBackDistance then
+				self.measuredBackDistance = d
+				self:debug('Measured back distance is %.1f m', self.measuredBackDistance)
+			end
+		else
+			return true
+		end
+	end
+end
+
 
 function CombineAIDriver:setStrawSwath(enable)
 	local strawSwathCanBeEnabled = false

@@ -290,9 +290,6 @@ function CombineUnloadManager:updateCombinesAttributes()
 		attributes.fillLevel = self:getCombinesFillLevel(combine)
 		attributes.secondsTill80Percent = self:getSecondsTill80Percent(combine) and self:getSecondsTill80Percent(combine) or attributes.secondsTill80Percent
 		self:updateFillSpeed(combine,attributes)
-		if attributes.measuredBackDistance == nil then
-			self:raycastBack(combine)
-		end
 		if courseplay.debugChannels[self.debugChannel] then
 			renderText(0.1,0.175+(0.02*number) ,0.015,
 					string.format("%s: leftOK: %s; rightOK:%s numUnloaders:%d readyToUnload: %s",
@@ -451,11 +448,6 @@ function CombineUnloadManager:getCombinesFillLevel(combine)
 	return combine:getFillUnitFillLevel(dischargeNode.fillUnitIndex)
 end
 
-
-function CombineUnloadManager:getCombinesMeasuredBackDistance(combine)
-	return self.combines[combine].measuredBackDistance
-end
-
 function CombineUnloadManager:getOnFieldSituation(combine)
 	local offset = self:getPipeOffset(combine)
 
@@ -529,29 +521,6 @@ function CombineUnloadManager:getOnFieldSituation(combine)
 	local leftOK = leftField and leftFruit < totalAreaLeft*0.05
 	local rightOK = rightField and rightFruit < totalAreaRight*0.05
 	return leftOK,rightOK
-end
-
-function CombineUnloadManager:raycastBack(chopper)
-	local nx, ny, nz = localDirectionToWorld(chopper.cp.directionNode, 0, 0, 1)
-	local x, y, z = localToWorld(chopper.cp.directionNode, 0, 1.5, -10)
-	cpDebug:drawLine(x, y, z, 0, 100, 0, x+(nx*10), y+(ny*10), z+(nz*10))
-	raycastAll(x, y, z, nx, ny, nz, 'raycastBackCallback', 10, self)
-end
-
--- I believe this tries to figure out how far the back of a combine is from its direction node.
--- TODO: just use vehicle.sizeLength instead?
-function CombineUnloadManager:raycastBackCallback(hitObjectId, x, y, z, distance, nx, ny, nz, subShapeIndex)
-	if hitObjectId ~= 0 then
-		--print("hitObject: "..tostring(hitObjectId).."; distance: "..tostring(distance))
-		cpDebug:drawPoint(x, y, z, 1, 1 , 1);
-		local object = g_currentMission:getNodeObject(hitObjectId)
-		if object and self.combines[object] and self.combines[object].measuredBackDistance == nil then
-			self.combines[object].measuredBackDistance = 10 - distance
-			print(string.format("%s: measuredBackDistance(%s) = 10 - distance(%s)",tostring(object.name),tostring(self.combines[object].measuredBackDistance),tostring(distance)))
-		else
-			return true
-		end
-	end
 end
 
 function CombineUnloadManager:getPossibleCombines(vehicle)
