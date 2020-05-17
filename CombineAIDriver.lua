@@ -1432,6 +1432,5 @@ function CombineAIDriver:onDraw()
 	end
 
 	UnloadableFieldworkAIDriver.onDraw(self)
-	self.vehicle:setIsSwathActive(enable and strawSwathCanBeEnabled)
 end
 
