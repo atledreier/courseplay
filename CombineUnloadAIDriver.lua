@@ -1946,12 +1946,21 @@ function CombineUnloadAIDriver:onCombineTurnStart(ix, turnType)
 	end
 end
 
+------------------------------------------------------------------------------------------------------------------------
+-- We are blocking another vehicle who wants us to move out of way
+------------------------------------------------------------------------------------------------------------------------
 function CombineUnloadAIDriver:onBlockingOtherVehicle(blockedVehicle)
 	self.stateAfterMovedOutOfWay = self.onFieldState
 	self:debug('%s wants me to move out of way', blockedVehicle:getName())
-	local reverseCourse = self:getStraightReverseCourse(10)
-	self:startCourse(reverseCourse, 1, self.course, self.course:getCurrentWaypointIx())
-	self:setNewOnFieldState(self.states.MOVING_OUT_OF_WAY)
+	if self.onFieldState ~= self.states.MOVING_OUT_OF_WAY then
+		-- reverse back a bit, this usually solves the problem
+		-- TODO: there may be better strategies depending on the situation
+		local reverseCourse = self:getStraightReverseCourse(10)
+		self:startCourse(reverseCourse, 1, self.course, self.course:getCurrentWaypointIx())
+		self:setNewOnFieldState(self.states.MOVING_OUT_OF_WAY)
+	else
+		self:debug('Already busy moving out of the way')
+	end
 end
 
 ------------------------------------------------------------------------------------------------------------------------

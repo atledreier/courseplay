@@ -1378,7 +1378,7 @@ function CombineAIDriver:isReadyToUnload()
 	if not self.fieldworkCourse then return false end
     -- around a turn, for example already working on the next row but not done with the turn yet
     local lastIx = self.fieldworkCourse:getLastPassedWaypointIx()
-	if not lastIx or (lastIx and self.fieldworkCourse:hasTurnWithinDistance(lastIx, 10)) then return false end
+	if not lastIx or (lastIx and self.fieldworkCourse:getDistanceToNextTurn(lastIx) < 10) then return false end
     return true
 end
 
