@@ -1221,7 +1221,7 @@ function CombineUnloadAIDriver:isInFrontAndAlignedToMovingCombine(maxDirectionDi
 end
 
 function CombineUnloadAIDriver:isOkToStartFollowingChopper()
-	return self.combineToUnload.cp.driver:isChopper() and self:isBehindAndAlignedToCombine()
+	return self.combineToUnload.cp.driver:isChopper() and self:isBehindAndAlignedToChopper()
 end
 
 function CombineUnloadAIDriver:isOkToStartUnloadingCombine()

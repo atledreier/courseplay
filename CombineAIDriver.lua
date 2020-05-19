@@ -1378,8 +1378,14 @@ function CombineAIDriver:isReadyToUnload()
 	if not self.fieldworkCourse then return false end
     -- around a turn, for example already working on the next row but not done with the turn yet
     local lastIx = self.fieldworkCourse:getLastPassedWaypointIx()
-	if not lastIx or (lastIx and self.fieldworkCourse:getDistanceToNextTurn(lastIx) < 10) then return false end
-    return true
+	if lastIx then
+		local dToNextTurn = self.fieldworkCourse:getDistanceToNextTurn(lastIx)
+		-- if distance to last turn is not known then we are ok. If it is known and the turn
+		-- is close, we aren't ready.
+		return dToNextTurn and dToNextTurn < 10 or true
+	else
+		return false
+	end
 end
 
 --- Will not move until unload is done? Unloaders like to know this.
