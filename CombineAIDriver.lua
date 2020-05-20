@@ -630,10 +630,11 @@ function CombineAIDriver:getSafeUnloaderDestinationWaypoint(ix)
 	return newWpIx
 end
 
+-- TODO: put this in onBlocked()?
 function CombineAIDriver:checkBlockingUnloader()
 	if not self.backwardLookingProximitySensorPack then return end
 	local d, blockingVehicle = self.backwardLookingProximitySensorPack:getClosestObjectDistanceAndRootVehicle()
-	if d < 1000 and blockingVehicle and self:isStopped() then
+	if d < 1000 and blockingVehicle and self:isStopped() and not self:isWaitingForUnload() then
 		if g_updateLoopIndex % 250 == 0 then
 			self:debug('Can\'t reverse, %s at %.1f m is blocking', blockingVehicle:getName(), d)
 			if blockingVehicle.cp.driver and blockingVehicle.cp.driver.onBlockingOtherVehicle then

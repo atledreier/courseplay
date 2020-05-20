@@ -1400,7 +1400,7 @@ function CombineUnloadAIDriver:startDrivingToCombine()
 					self.combineToUnload, self.onPathfindingDoneToMovingCombine)
 		else
 			self:debug('can\'t find rendezvous waypoint to combine, waiting')
-			--self:startPathfindingToCombine(self.onPathfindingDoneToCombine, nil, -15)
+			self:setNewOnFieldState(self.states.WAITING_FOR_COMBINE_TO_CALL)
 		end
 	end
 end
