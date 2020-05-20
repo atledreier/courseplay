@@ -183,6 +183,14 @@ function CombineUnloadAIDriver:drive(dt)
 	end
 end
 
+-- we want to come to a hard stop while the base class pathfinder is running (starting a course with pathfinding),
+-- because the way AIDriver works, it'll initialize the PPC to the new course/waypoint, which will turn the
+-- vehicle's wheels in that direction, and since setting speed to 0 will just let the vehicle roll for a while
+-- it may be running into something (like the combine)
+function CombineUnloadAIDriver:stopForPathfinding()
+	self:hold()
+end
+
 function CombineUnloadAIDriver:stopAndWait(dt)
 	self:driveInDirection(dt,0,1,true,0,false)
 end

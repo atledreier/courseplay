@@ -496,10 +496,10 @@ function CombineUnloadManager:getOnFieldSituation(combine)
 	if fruitType == nil or fruitType == 0 then
 		hasFruit,fruitType = courseplay:areaHasFruit(x, z, nil, math.abs(offset), math.abs(offset))
 	end
-	local minHarvestable, maxHarvestable = 1,1
+	local noFruitOnLeft, noFruitOnRight = true, true
 	if fruitType ~= 0  and fruitType ~= nil then
+		local minHarvestable, maxHarvestable = 1, 1
 		maxHarvestable = g_fruitTypeManager.fruitTypes[fruitType].numGrowthStates
-	end
 
 	--cpDebug:drawLine(lStartX,y+1,lStartZ, 100, 0, 0, lWidthX,y+1,lWidthZ)
 	--cpDebug:drawLine(lWidthX,y+1,lWidthZ, 100, 0, 0, lHeightX,y+1,lHeightZ)
@@ -509,19 +509,20 @@ function CombineUnloadManager:getOnFieldSituation(combine)
 	--cpDebug:drawLine(rWidthX,y+1,rWidthZ, 0, 100, 0, rHeightX,y+1,rHeightZ)
 	--cpDebug:drawLine(rHeightX,y+1,rHeightZ, 0, 100, 0, rStartX,y+1,rStartZ)
 
+		local leftFruit, totalAreaLeft = FieldUtil.getFruitArea(lStartX, lStartZ, lWidthX, lWidthZ, lHeightX, lHeightZ, {}, {}, fruitType, minHarvestable , maxHarvestable, 0, 0, 0,false);
+		noFruitOnLeft = leftFruit < totalAreaLeft * 0.05
+		local rightFruit, totalAreaRight = FieldUtil.getFruitArea(rStartX, rStartZ, rWidthX, rWidthZ, rHeightX, rHeightZ, {}, {}, fruitType, minHarvestable , maxHarvestable, 0, 0, 0,false);
+		noFruitOnRight = rightFruit < totalAreaRight * 0.05
+	end
 
-
-	local leftFruit, totalAreaLeft = FieldUtil.getFruitArea(lStartX, lStartZ, lWidthX, lWidthZ, lHeightX, lHeightZ, {}, {}, fruitType, minHarvestable , maxHarvestable, 0, 0, 0,false);
-	local rightFruit, totalAreaRight = FieldUtil.getFruitArea(rStartX, rStartZ, rWidthX, rWidthZ, rHeightX, rHeightZ, {}, {}, fruitType, minHarvestable , maxHarvestable, 0, 0, 0,false);
-	local leftField = courseplay:isField(lWidthX,lWidthZ,0.1,0.1)
-	local rightField = courseplay:isField(rWidthX,rWidthZ,0.1,0.1)
-
-	--print(string.format("fruit:%s; leftFruit:%s; totalLeft:%s, leftField:%s, rightFruit:%s, totalRight:%s; rightField:%s",
-	--tostring(fruitType),tostring(leftFruit),tostring(totalArealeft),tostring(leftField),tostring(rightFruit),tostring(totalArearight),tostring(rightField)))
-	-- TODO: for now, don't care if there's field on left/right
-	leftField, rightField = true, true
-	local leftOK = leftField and leftFruit < totalAreaLeft * 0.05
-	local rightOK = rightField and rightFruit < totalAreaRight * 0.05
+	local leftField = courseplay:isField(lWidthX, lWidthZ,0.1,0.1)
+	local rightField = courseplay:isField(rWidthX, rWidthZ,0.1,0.1)
+	-- TODO: for now, it isn't ok to drive off the field when following a chopper.
+	if not self:getIsChopper(combine) then
+		leftField, rightField = true, true
+	end
+	local leftOK = leftField and noFruitOnLeft
+	local rightOK = rightField and noFruitOnRight
 	return leftOK, rightOK
 end
 

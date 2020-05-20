@@ -567,25 +567,39 @@ function CombineAIDriver:getUnloaderRendezvousWaypoint(unloaderEstimatedSecondsE
 	if not self.secondsUntilFull or (self.secondsUntilFull and self.secondsUntilFull > unloaderEstimatedSecondsEnroute) then
 		-- unloader will reach us before we are full, or we don't know where we'll be full, guess at which waypoint we will be by then
 		unloaderRendezvousWaypointIx = self:getSafeUnloaderDestinationWaypoint(unloaderRendezvousWaypointIx)
-		if self.fieldworkCourse:isPipeInFruitAt(unloaderRendezvousWaypointIx) then
-			self:debug('pipe would be in fruit at the planned rendezvous waypoint %d', unloaderRendezvousWaypointIx)
+		if self:canUnloadWhileMovingAtWaypoint(unloaderRendezvousWaypointIx) then
+			self.agreedUnloaderRendezvousWaypointIx = unloaderRendezvousWaypointIx
+			self:debug('Rendezvous with unloader at waypoint %d in %d m', unloaderRendezvousWaypointIx, dToUnloaderRendezvous)
+			return self.fieldworkCourse:getWaypoint(unloaderRendezvousWaypointIx), unloaderRendezvousWaypointIx, unloaderEstimatedSecondsEnroute
+		else
 			return nil, 0, 0
 		end
-		self.agreedUnloaderRendezvousWaypointIx = unloaderRendezvousWaypointIx
-		self:debug('Rendezvous with unloader at waypoint %d in %d m', unloaderRendezvousWaypointIx, dToUnloaderRendezvous)
-		return self.fieldworkCourse:getWaypoint(unloaderRendezvousWaypointIx), unloaderRendezvousWaypointIx, unloaderEstimatedSecondsEnroute
 
 	elseif self.waypointIxWhenFull then
 		self:debug('We don\'t know when exactly we\'ll be full, but it will be at waypoint %d in %d m',
 				self.waypointIxWhenFull, dToUnloaderRendezvous)
-		self.agreedUnloaderRendezvousWaypointIx = self.waypointIxWhenFull
-		return self.fieldworkCourse:getWaypoint(self.waypointIxWhenFull), self.waypointIxWhenFull,
-			self.distanceToWaypointWhenFull / (self:getWorkSpeed() / 3.6)
-
+		if self:canUnloadWhileMovingAtWaypoint(unloaderRendezvousWaypointIx) then
+			self.agreedUnloaderRendezvousWaypointIx = self.waypointIxWhenFull
+			return self.fieldworkCourse:getWaypoint(self.waypointIxWhenFull), self.waypointIxWhenFull, self.distanceToWaypointWhenFull / (self:getWorkSpeed() / 3.6)
+		else
+			return nil, 0, 0
+		end
 	else
 		self:debug('We don\t know when exactly we\'ll be full')
 		return nil, 0, 0
 	end
+end
+
+function CombineAIDriver:canUnloadWhileMovingAtWaypoint(ix)
+	if self.fieldworkCourse:isPipeInFruitAt(ix) then
+		self:debug('pipe would be in fruit at the planned rendezvous waypoint %d', ix)
+		return false
+	end
+	if self.fieldworkCourse:isOnHeadland(ix, 1) then
+		self:debug('planned rendezvous waypoint %d is on first headland, no unloading of moving combine there', ix)
+		return false
+	end
+	return true
 end
 
 --- Check if ix is a safe destination for an unloader, return an adjusted ix if not
@@ -1107,11 +1121,11 @@ function CombineAIDriver:canDischarge()
 end
 
 function CombineAIDriver:isDischarging()
-	if self.pipe then
-		return self.pipe:getDischargeState() ~= Dischargeable.DISCHARGE_STATE_OFF
-	else
-		return false
+	if self.combine then
+		local currentDischargeNode = self.combine:getCurrentDischargeNode()
+		return currentDischargeNode and currentDischargeNode.isEffectActive
 	end
+	return false
 end
 
 function CombineAIDriver:isPotatoOrSugarBeetHarvester()

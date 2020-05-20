@@ -1358,7 +1358,7 @@ end
 ---@return boolean true when a pathfinding successfully started or an alignment course was added
 function AIDriver:startCourseWithPathfinding(course, ix, zOffset, fieldNum, alwaysUsePathfinding)
 	-- make sure we have at least a direct course until we figure out a better path. This can happen
-	-- when we don't have a course set yet when starting the pathfinding, for example when starting the course.`
+	-- when we don't have a course set yet when starting the pathfinding, for example when starting the course.
 	self:resetTrafficControl()
 	self.course = course
 	self.ppc:setCourse(course)
@@ -1428,10 +1428,15 @@ function AIDriver:driveToPointWithPathfinding(waypoint, zOffset, course, ix, fie
 	return false
 end
 
+--- Override this if you for example want to completely stop (speed 0 will keep rolling for a while)
+function AIDriver:stopForPathfinding()
+	self:setSpeed(0)
+end
+
 function AIDriver:updatePathfinding()
 	if self.pathfinder and self.pathfinder:isActive() then
 		-- stop while pathfinding is running
-		self:setSpeed(0)
+		self:stopForPathfinding()
 		local done, path = self.pathfinder:resume()
 		if done then
 			self.pathfindingDoneCallbackFunc(self.pathfindingDoneObject, path)
