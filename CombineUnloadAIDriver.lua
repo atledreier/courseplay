@@ -1768,10 +1768,18 @@ function CombineUnloadAIDriver:unloadMovingCombine()
 		self:setSpeed(0)
 	end
 
+	-- combine stopped in the meanwhile, like for example end of course
+	if self.combineToUnload.cp.driver:willWaitForUnloadToFinish() then
+		self:debug('change to unload stopped combine')
+		self:setNewOnFieldState(self.states.UNLOADING_STOPPED_COMBINE)
+		return
+	end
+
 	-- when the combine is turning just don't move
 	if self.combineToUnload.cp.driver:isManeuvering() then
 		self:hold()
 	elseif not self:isOkToStartUnloadingCombine() then
+		self:debug('not in a good position to unload, trying to recover')
 		-- switch to driving only when not holding for maneuvering combine
 		-- for some reason (like combine turned) we are not in a good position anymore then set us up again
 		self:startDrivingToCombine()
